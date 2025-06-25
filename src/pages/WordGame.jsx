@@ -47,7 +47,7 @@ function WordGame() {
     }
   }, [status, letters, checkWord]);
 
-  const handleKeyClick = ((key) => {
+  const handleKeyClick = useCallback((key) => {
     actionListener.current.emit('KEY_PRESS', key);
   }, []);
 
