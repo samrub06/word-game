@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import MyActionListener from '../actions/MyActionListener';
 import './WordGame.css';
 
@@ -16,30 +16,8 @@ function WordGame() {
   const actionListener = useRef(new MyActionListener());
   const [isLoading, setIsLoading] = useState(false);
 
-  // Manage keyboard actions
-  React.useEffect(() => {
-    actionListener.current.registerListener('KEY_PRESS', (key) => {
-      console.log(key);
-
-      if (status !== 'idle') return;
-      if (key === 'BACK') {
-        setLetters((prev) => prev.slice(0, -1));
-      } else if (key === 'ENTER') {
-        if (letters.length === WORD_LENGTH) {
-          checkWord(letters.join(''));
-        }
-      } else if (letters.length < WORD_LENGTH && /^[A-Z]$/.test(key)) {
-        setLetters((prev) => [...prev, key]);
-      }
-    }); 
-    return () => {
-      actionListener.current.removeListener('KEY_PRESS');
-    };
-    // eslint-disable-next-line
-  }, [letters, status]);
-
-  // Verify the word (API or simple list)
-  const checkWord = async (word) => {
+  // ✅ useCallback to avoid unnecessary re-creations
+  const checkWord = useCallback(async (word) => {
     setIsLoading(true);
     try {
       const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
@@ -52,30 +30,51 @@ function WordGame() {
       setStatus('error');
     }
     setIsLoading(false);
-  };
+  }, []);
 
-  // Handle key click
-  const handleKeyClick = (key) => {
+  // ✅ useCallback for the key logic
+  const handleKeyPress = useCallback((key) => {
+    if (status !== 'idle') return;
+    
+    if (key === 'BACK') {
+      setLetters((prev) => prev.slice(0, -1));
+    } else if (key === 'ENTER') {
+      if (letters.length === WORD_LENGTH) {
+        checkWord(letters.join(''));
+      }
+    } else if (letters.length < WORD_LENGTH && /^[A-Z]$/.test(key)) {
+      setLetters((prev) => [...prev, key]);
+    }
+  }, [status, letters, checkWord]);
+
+  const handleKeyClick = ((key) => {
     actionListener.current.emit('KEY_PRESS', key);
-  };
+  }, []);
 
-  // Reset after validation
-  React.useEffect(() => {
+  useEffect(() => {
+    // 1. Save the keyboard listener
+    actionListener.current.registerListener('KEY_PRESS', handleKeyPress);
+    
+    // 2. Add the physical keyboard listener
+    const physicalKeyListener = (e) => actionListener.current.handlePhysicalKey(e);
+    window.addEventListener('keydown', physicalKeyListener);
+    
+    // 3. Integrated reset timer
+    let resetTimer;
     if (status !== 'idle') {
-      const timer = setTimeout(() => {
+      resetTimer = setTimeout(() => {
         setLetters([]);
         setStatus('idle');
       }, 1200);
-      return () => clearTimeout(timer);
     }
-  }, [status]);
-
-  React.useEffect(() => {
-    const listener = (e) => actionListener.current.handlePhysicalKey(e);
-    window.addEventListener('keydown', listener);
-    return () => window.removeEventListener('keydown', listener);
-    // eslint-disable-next-line
-  }, []);
+    
+    // 4. Unified cleanup
+    return () => {
+      actionListener.current.removeListener('KEY_PRESS');
+      window.removeEventListener('keydown', physicalKeyListener);
+      if (resetTimer) clearTimeout(resetTimer);
+    };
+  }, [handleKeyPress, status]);
 
   return (
     <div className="wordgame-container">
