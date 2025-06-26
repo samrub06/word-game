@@ -16,23 +16,6 @@ function WordGame() {
   const actionListener = useRef(new MyActionListener());
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ useCallback to avoid unnecessary re-creations
-  const checkWord = useCallback(async (word) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
-      if (res.ok) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-      }
-    } catch {
-      setStatus('error');
-    }
-    setIsLoading(false);
-  }, []);
-
-  // ✅ useCallback for the key logic
   const handleKeyPress = useCallback((key) => {
     if (status !== 'idle') return;
     
@@ -40,23 +23,35 @@ function WordGame() {
       setLetters((prev) => prev.slice(0, -1));
     } else if (key === 'ENTER') {
       if (letters.length === WORD_LENGTH) {
-        checkWord(letters.join(''));
+        setIsLoading(true);
+        fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${letters.join('').toLowerCase()}`)
+          .then(res => {
+            if (res.ok) {
+              setStatus('success');
+            } else {
+              setStatus('error');
+            }
+          })
+          .catch(() => setStatus('error'))
+          .finally(() => setIsLoading(false));
       }
     } else if (letters.length < WORD_LENGTH && /^[A-Z]$/.test(key)) {
       setLetters((prev) => [...prev, key]);
     }
-  }, [status, letters, checkWord]);
+  }, [status, letters]);
 
-  const handleKeyClick = useCallback((key) => {
+  // ❌ No need for useCallback - simple function, not in useEffect
+  const handleKeyClick = (key) => {
     actionListener.current.emit('KEY_PRESS', key);
-  }, []);
+  };
 
   useEffect(() => {
-    // 1. Save the keyboard listener
-    actionListener.current.registerListener('KEY_PRESS', handleKeyPress);
+    // 1. Register keyboard listener
+    const listener = actionListener.current;
+    listener.registerListener('KEY_PRESS', handleKeyPress);
     
-    // 2. Add the physical keyboard listener
-    const physicalKeyListener = (e) => actionListener.current.handlePhysicalKey(e);
+    // 2. Add physical keyboard listener
+    const physicalKeyListener = (e) => listener.handlePhysicalKey(e);
     window.addEventListener('keydown', physicalKeyListener);
     
     // 3. Integrated reset timer
@@ -70,7 +65,7 @@ function WordGame() {
     
     // 4. Unified cleanup
     return () => {
-      actionListener.current.removeListener('KEY_PRESS');
+      listener.removeListener('KEY_PRESS');
       window.removeEventListener('keydown', physicalKeyListener);
       if (resetTimer) clearTimeout(resetTimer);
     };
