@@ -17,7 +17,7 @@ function WordGame() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleKeyPress = useCallback((key) => {
-    if (status !== 'idle') return;
+    if (status !== 'idle' || isLoading) return;
     
     if (key === 'BACK') {
       setLetters((prev) => prev.slice(0, -1));
@@ -38,9 +38,8 @@ function WordGame() {
     } else if (letters.length < WORD_LENGTH && /^[A-Z]$/.test(key)) {
       setLetters((prev) => [...prev, key]);
     }
-  }, [status, letters]);
+  }, [status, letters, isLoading]);
 
-  // ❌ No need for useCallback - simple function, not in useEffect
   const handleKeyClick = (key) => {
     actionListener.current.emit('KEY_PRESS', key);
   };
